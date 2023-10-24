@@ -10,3 +10,7 @@
   - ex2: neo4j://localhost:7687
 
   - 관련 정보는 https://neo4j.com/docs/driver-manual/4.0/client-applications/#driver-configuration-examples 참고
+
+# 쿼리 언어
+
+동일 폴더의 [cypher.md](cypher.md) 확인
