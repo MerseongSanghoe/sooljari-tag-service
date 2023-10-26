@@ -3,5 +3,7 @@
 
 !.gitignore
 !.env.example
+!.eslintrc.json
+!.prettierrc
 
 node_modules
