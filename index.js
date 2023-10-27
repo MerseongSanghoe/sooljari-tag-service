@@ -2,7 +2,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
-import neo4j from 'neo4j-driver';
+import neo4j, { Driver } from 'neo4j-driver';
 import mysql from 'mysql';
 
 dotenv.config();
@@ -10,6 +10,7 @@ dotenv.config();
 /**
  *  Connect to neo4j tag database
  */
+/** @type {Driver} */
 let tagDriver;
 try {
   const [neoid, neopw] = process.env.NEO4J_AUTH?.split('/') ?? ['', ''];
@@ -72,9 +73,20 @@ app.get('/tag/bytag/:tagId', (req, res) => {
 
 app.post('/_local/alcohol-update', (req, res) => {
   let mainSql = 'SELECT id, title FROM alcohols;';
-  mainConn.query(mainSql, (err, rows) => {
+  mainConn.query(mainSql, async (err, rows) => {
     if (err) throw err;
-    res.send(rows);
+    for (let i = 0; i < rows.length; ++i) {
+      const data = rows[i];
+
+      const { records, summary, keys } = await tagDriver.executeQuery(
+        'MERGE (al:Alcohol {dbid: $dbid}) \
+SET al.title = $title \
+RETURN al.dbid',
+        { dbid: parseInt(data.id, 10), title: data.title },
+        { database: 'neo4j' }
+      );
+    }
+    res.sendStatus(200);
   });
 });
 
@@ -87,5 +99,3 @@ app.listen(port, () => {
     `Example app listening on port ${port} with ${process.env.NODE_ENV}`
   );
 });
-
-await tagDriver.close();
