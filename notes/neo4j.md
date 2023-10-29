@@ -39,7 +39,7 @@ https://neo4j.com/docs/operations-manual/current/tutorial/tutorial-clustering-do
 
 ```bash
 # .data, .conf 폴더가 없는경우
-mkdir .data .conf
+mkdir .data .conf .logs
 
 export USER_ID="$(id -u)"
 export GROUP_ID="$(id -g)"
