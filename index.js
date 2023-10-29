@@ -16,7 +16,8 @@ try {
   const [neoid, neopw] = process.env.NEO4J_AUTH?.split('/') ?? ['', ''];
   tagDriver = neo4j.driver(
     process.env.TAG_DATABASE_HOST ?? '',
-    neo4j.auth.basic(neoid, neopw)
+    neo4j.auth.basic(neoid, neopw),
+    { disableLosslessIntegers: true } // 없으면 숫자가 { low, high }로 나옴
   );
   const serverInfo = await tagDriver.getServerInfo();
   console.log('Connection established');
@@ -63,15 +64,84 @@ app.get('/', (req, res) => {
   res.send('Hello world!');
 });
 
-app.get('/tag/byalc/:alcId', (req, res) => {
-  res.send('Not implemented');
+app.get('/tag/byalc/:alcId', async (req, res) => {
+  // node 개수 확인해 없으면 return 404
+  const { records: nodeCount } = await tagDriver.executeQuery(
+    'MATCH (a:Alcohol {dbid: $dbid}) RETURN count(a) AS count',
+    { dbid: parseInt(req.params.alcId, 10) },
+    { database: 'neo4j' }
+  );
+
+  if (nodeCount[0].get('count') <= 0) {
+    res.status(404).send({
+      data: [],
+      err: `No alcohol node with ${req.params.alcId}`,
+      count: 0,
+    });
+    return;
+  }
+
+  const { records } = await tagDriver.executeQuery(
+    'MATCH (a:Alcohol {dbid: $dbid})-[i:LINKED]->(t:Tag)\
+    RETURN a, t.title AS tag, i.weight AS weight\
+    ORDER BY i.weight;',
+    { dbid: parseInt(req.params.alcId, 10) },
+    { database: 'neo4j' }
+  );
+  const toSend = records.map((e) => {
+    return {
+      title: e.get('tag'),
+      weight: e.get('weight'),
+    };
+  });
+
+  res.status(200).send({
+    data: toSend,
+    count: records.length,
+  });
 });
 
-app.get('/tag/bytag/:tagId', (req, res) => {
-  res.send('Not implemented');
+app.get('/tag/bytag/:tagTitle', async (req, res) => {
+  // node 개수 확인해 없으면 return 404
+  const { records: nodeCount } = await tagDriver.executeQuery(
+    'MATCH (t:Tag {title: $title}) RETURN count(t) AS count',
+    { title: req.params.tagTitle },
+    { database: 'neo4j' }
+  );
+
+  if (nodeCount[0].get('count') <= 0) {
+    res.status(404).send({
+      data: [],
+      err: `No tag node with ${req.params.tagTitle}`,
+      count: 0,
+    });
+    return;
+  }
+
+  const { records } = await tagDriver.executeQuery(
+    'MATCH (t:Tag {title: $title})<-[i:LINKED]-(a:Alcohol)-[n:LINKED]->(t2:Tag)\
+    RETURN i.weight AS weight, a.title AS alcohol, collect({title: t2.title, weight: n.weight}) AS otherTags\
+    ORDER BY i.weight;',
+    { title: req.params.tagTitle },
+    { database: 'neo4j' }
+  );
+  const toSend = records.map((e) => {
+    return {
+      weight: e.get('weight'),
+      alcohol: e.get('alcohol'),
+      otherTags: e.get('otherTags'),
+    };
+  });
+
+  res.status(200).send({
+    data: toSend,
+    count: records.length,
+  });
 });
 
 app.post('/_local/alcohol-update', (req, res) => {
+  console.warn('Alcohol database update start...');
+
   let mainSql = 'SELECT id, title FROM alcohols;';
   mainConn.query(mainSql, async (err, rows) => {
     if (err) throw err;
@@ -79,14 +149,14 @@ app.post('/_local/alcohol-update', (req, res) => {
       const data = rows[i];
 
       const { records, summary, keys } = await tagDriver.executeQuery(
-        'MERGE (al:Alcohol {dbid: $dbid}) \
-SET al.title = $title \
-RETURN al.dbid',
+        'MERGE (al:Alcohol {dbid: $dbid})\
+        SET al.title = $title;',
         { dbid: parseInt(data.id, 10), title: data.title },
         { database: 'neo4j' }
       );
     }
     res.sendStatus(200);
+    console.warn('Alcohol database update end');
   });
 });
 
