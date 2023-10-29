@@ -1,0 +1,9 @@
+{
+  "apps": [
+    {
+      "name": "sooljari-tag-service",
+      "script": "npm",
+      "args": "start"
+    }
+  ]
+}
