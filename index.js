@@ -60,6 +60,9 @@ if (process.env.NODE_ENV === 'production') {
   app.use(morgan('dev'));
 }
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.get('/', (req, res) => {
   res.send('Hello world!');
 });
@@ -148,7 +151,7 @@ app.post('/_local/alcohol-update', (req, res) => {
     for (let i = 0; i < rows.length; ++i) {
       const data = rows[i];
 
-      const { records, summary, keys } = await tagDriver.executeQuery(
+      await tagDriver.executeQuery(
         'MERGE (al:Alcohol {dbid: $dbid})\
         SET al.title = $title;',
         { dbid: parseInt(data.id, 10), title: data.title },
@@ -160,12 +163,49 @@ app.post('/_local/alcohol-update', (req, res) => {
   });
 });
 
-app.post('/_local/add-tag', (req, res) => {
-  res.send('Not implemented');
+app.post('/_local/add-tag', async (req, res) => {
+  /**
+   * @type { {password: string, alcId: string, tags: {title: string, weight: string?}[]} }
+   */
+  const { password, alcId, tags } = req.body;
+  const alcIdNum = parseInt(alcId, 10);
+
+  if (password !== process.env.LOCAL_AUTH) {
+    res.sendStatus(403);
+    return;
+  }
+  if (
+    alcId === undefined ||
+    isNaN(alcIdNum) ||
+    tags === undefined ||
+    tags.length === 0
+  ) {
+    res.sendStatus(400);
+    return;
+  }
+
+  for (let tag of tags) {
+    if (tag.title === undefined) continue;
+
+    let weight = parseInt(tag.weight ?? '0', 10);
+    if (isNaN(weight)) weight = 0;
+
+    await tagDriver.executeQuery(
+      'MATCH (al:Alcohol {dbid: $dbid})\
+      MERGE (tg:Tag {title: $title})\
+      MERGE (al)-[ln:LINKED]->(tg)\
+      ON MATCH SET ln.weight = ln.weight + $weight\
+      ON CREATE SET ln.weight = $weight;',
+      { dbid: alcIdNum, title: tag.title, weight: weight },
+      { database: 'neo4j' }
+    );
+  }
+
+  res.sendStatus(200);
 });
 
 app.listen(port, () => {
   console.log(
-    `Example app listening on port ${port} with ${process.env.NODE_ENV}`
+    `neo4j api app listening on port ${port} with ${process.env.NODE_ENV}`
   );
 });
