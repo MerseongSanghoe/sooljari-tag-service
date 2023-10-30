@@ -27,8 +27,8 @@ ID에 종속적으로 진행하며, 현재는 타이틀만 가져옴
   alcId: int, // alcohol database id
   tags: [
     {
-        title: string
-        weight: int // 0 is default
+        title: string,
+        weight: int, // 0 is default
     }, ...
   ], // list of tags
 }
