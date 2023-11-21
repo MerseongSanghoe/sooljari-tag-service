@@ -123,16 +123,19 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
 
   const { records } = await tagDriver.executeQuery(
     'MATCH (t:Tag {title: $title})<-[i:LINKED]-(a:Alcohol)-[n:LINKED]->(t2:Tag)\
-    RETURN i.weight AS weight, a.dbid AS id, a.title AS alcohol, collect({title: t2.title, weight: n.weight}) AS otherTags\
+    RETURN i.weight AS weight, a AS alcohol, collect({title: t2.title, weight: n.weight}) AS otherTags\
     ORDER BY i.weight;',
     { title: req.params.tagTitle },
     { database: 'neo4j' }
   );
   const toSend = records.map((e) => {
+    const alc = e.get('alcohol');
     return {
       weight: e.get('weight'),
-      id: e.get('id'),
-      alcohol: e.get('alcohol'),
+      id: alc.id,
+      title: alc.title,
+      degree: alc.degree,
+      category: alc.category,
       otherTags: e.get('otherTags'),
     };
   });
@@ -154,8 +157,13 @@ app.post('/_local/alcohol-update', (req, res) => {
 
       await tagDriver.executeQuery(
         'MERGE (al:Alcohol {dbid: $dbid})\
-        SET al.title = $title;',
-        { dbid: parseInt(data.id, 10), title: data.title },
+        SET al.title = $title, al.degree = $degree, al.category = $cate;',
+        {
+          dbid: parseInt(data.id, 10),
+          title: data.title,
+          degree: parseFloat(data.degree),
+          cate: data.category,
+        },
         { database: 'neo4j' }
       );
     }
