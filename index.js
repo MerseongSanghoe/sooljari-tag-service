@@ -132,10 +132,10 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
     const alc = e.get('alcohol');
     return {
       weight: e.get('weight'),
-      id: alc.id,
-      title: alc.title,
-      degree: alc.degree,
-      category: alc.category,
+      id: alc.properties.dbid,
+      title: alc.properties.title,
+      degree: alc.properties.degree,
+      category: alc.properties.category,
       otherTags: e.get('otherTags'),
     };
   });
