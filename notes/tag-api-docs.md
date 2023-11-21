@@ -43,6 +43,7 @@ tagTitle에 해당하는 태그와 LINKED 관계의 주류를 가져오고,
 {
     data: [
         {
+            id: int, // id of alcohol
             alcohol: string, // title of alcohol
             weight: int, // weight of input tag with alcohol
             otherTags: [

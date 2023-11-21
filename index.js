@@ -123,7 +123,7 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
 
   const { records } = await tagDriver.executeQuery(
     'MATCH (t:Tag {title: $title})<-[i:LINKED]-(a:Alcohol)-[n:LINKED]->(t2:Tag)\
-    RETURN i.weight AS weight, a.title AS alcohol, collect({title: t2.title, weight: n.weight}) AS otherTags\
+    RETURN i.weight AS weight, a.dbid AS id, a.title AS alcohol, collect({title: t2.title, weight: n.weight}) AS otherTags\
     ORDER BY i.weight;',
     { title: req.params.tagTitle },
     { database: 'neo4j' }
@@ -131,6 +131,7 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
   const toSend = records.map((e) => {
     return {
       weight: e.get('weight'),
+      id: e.get('id'),
       alcohol: e.get('alcohol'),
       otherTags: e.get('otherTags'),
     };
