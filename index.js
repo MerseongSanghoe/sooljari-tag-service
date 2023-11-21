@@ -149,7 +149,7 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
 app.post('/_local/alcohol-update', (req, res) => {
   console.warn('Alcohol database update start...');
 
-  let mainSql = 'SELECT id, title FROM alcohols;';
+  let mainSql = 'SELECT id, title, degree, category FROM alcohols;';
   mainConn.query(mainSql, async (err, rows) => {
     if (err) throw err;
     for (let i = 0; i < rows.length; ++i) {
