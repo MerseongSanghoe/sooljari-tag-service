@@ -118,7 +118,7 @@ app.get('/tag/byalc/:alcId', async (req, res) => {
   const { records } = await tagDriver.executeQuery(
     'MATCH (a:Alcohol {dbid: $dbid})-[i:LINKED]->(t:Tag)\
     RETURN a, t.title AS tag, i.weight AS weight\
-    ORDER BY i.weight;',
+    ORDER BY i.weight DESC;',
     { dbid: parseInt(req.params.alcId, 10) },
     { database: 'neo4j' }
   );
@@ -154,20 +154,26 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
 
   const { records } = await tagDriver.executeQuery(
     'MATCH (t:Tag {title: $title})<-[i:LINKED]-(a:Alcohol)-[n:LINKED]->(t2:Tag)\
-    RETURN i.weight AS weight, a AS alcohol, collect({title: t2.title, weight: n.weight}) AS otherTags\
-    ORDER BY i.weight;',
+    RETURN i.weight AS weight,\
+    a AS alcohol,\
+    collect({ title: t2.title, weight: n.weight }) AS otherTags\
+    ORDER BY i.weight DESC;',
     { title: req.params.tagTitle },
     { database: 'neo4j' }
   );
   const toSend = records.map((e) => {
     const alc = e.get('alcohol');
     return {
-      weight: e.get('weight'),
+      score: e.get('weight'),
       id: alc.properties.dbid,
       title: alc.properties.title,
-      degree: alc.properties.degree,
       category: alc.properties.category,
-      otherTags: e.get('otherTags'),
+      degree: alc.properties.degree,
+      image: alc.properties.image,
+      tags: e
+        .get('otherTags')
+        .sort((a, b) => b.weight - a.weight)
+        .map((e) => e.title),
     };
   });
 
