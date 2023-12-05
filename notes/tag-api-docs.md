@@ -37,23 +37,21 @@ alcId에 해당하는 주류가 없는 경우
 tagTitle에 해당하는 태그와 LINKED 관계의 주류를 가져오고,  
 그 주류와 LINKED된 다른 tag들도 가져온다.
 
+검색시의 response와 최대한 동일하게 유지하도록 한다. -> 카드에 들어갈 데이터 폼 통일
+
 ### 200
 
 ```js
 {
     data: [
         {
+            score: int, // weight of input tag with alcohol
             id: int, // id of alcohol
-            weight: int, // weight of input tag with alcohol
             title: string,
-            degree: float,
             category: string,
-            otherTags: [
-                {
-                    title: string, // title of other tag
-                    weight: int, // weight with alcohol and this tag
-                }, ...
-            ]
+            degree: float,
+            image: string,
+            tags: [string] // list of tag titles
         }, ...
     ],
     count: int // count of data
