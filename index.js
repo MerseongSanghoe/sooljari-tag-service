@@ -49,6 +49,37 @@ try {
 }
 
 /**
+ * @param {() => any} conditionFunction
+ */
+function waitUntil(conditionFunction, interval = 100) {
+  return new Promise((resolve, reject) => {
+    // 조건 검사를 위한 인터벌 설정
+    const intervalId = setInterval(() => {
+      try {
+        if (conditionFunction()) {
+          // 조건 함수 평가
+          clearInterval(intervalId); // 조건이 충족되면 인터벌 중지
+          resolve(null); // Promise 해결
+        }
+      } catch (error) {
+        clearInterval(intervalId); // 에러 시 인터벌 중지
+        reject(error); // Promise 거부
+      }
+    }, interval);
+  });
+}
+
+/**
+ * 위의 waitUntil이 무한정 돌지 않게 하기 위한 방어장치용 함수
+ * @param {*} value return value
+ * @param {boolean} useThrow throw error on true
+ */
+function conditionWithThrow(value, useThrow, err = 'Error thrown.') {
+  if (useThrow) throw err;
+  return value;
+}
+
+/**
  * Start server
  */
 const app = express();
@@ -146,30 +177,76 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
   });
 });
 
-app.post('/_local/alcohol-update', (req, res) => {
+app.post('/_local/alcohol-update', async (req, res) => {
   console.warn('Alcohol database update start...');
 
+  let quitSign = false;
   let mainSql = 'SELECT id, title, degree, category FROM alcohols;';
-  mainConn.query(mainSql, async (err, rows) => {
-    if (err) throw err;
-    for (let i = 0; i < rows.length; ++i) {
-      const data = rows[i];
+  let alcRows = [];
+  try {
+    let endSign = false;
+    mainConn.query(mainSql, async (err, rows) => {
+      if (err) throw err;
+      alcRows = rows;
+      endSign = true;
+    });
+    await waitUntil(
+      () => conditionWithThrow(endSign, quitSign, 'waitUntil quited'),
+      50
+    );
+  } catch (err) {
+    console.error(err);
+    alcRows = [];
+  } finally {
+    quitSign = true;
+  }
 
-      await tagDriver.executeQuery(
-        'MERGE (al:Alcohol {dbid: $dbid})\
-        SET al.title = $title, al.degree = $degree, al.category = $cate;',
-        {
-          dbid: parseInt(data.id, 10),
-          title: data.title,
-          degree: parseFloat(data.degree),
-          cate: data.category,
-        },
-        { database: 'neo4j' }
+  for (let i = 0; i < alcRows.length; ++i) {
+    const data = alcRows[i];
+
+    quitSign = false;
+    let imageUrl = '';
+    let imageSql = `SELECT i.url \
+      FROM images AS i \
+      JOIN alcohols_images_links AS il \
+      ON i.id = il.image_id \
+      WHERE il.alcohol_id = ${data.id} \
+      ORDER BY il.image_order LIMIT 1;`;
+    try {
+      let endSign = false;
+      mainConn.query(imageSql, async (err, rows) => {
+        if (err) throw err;
+        imageUrl = rows[0]?.url ?? '';
+        endSign = true;
+      });
+      await waitUntil(
+        () => conditionWithThrow(endSign, quitSign, 'waitUntil quited'),
+        50
       );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      quitSign = true;
     }
-    res.sendStatus(200);
-    console.warn('Alcohol database update end');
-  });
+
+    await tagDriver.executeQuery(
+      'MERGE (al:Alcohol {dbid: $dbid})\
+      SET al.title = $title,\
+          al.degree = $degree,\
+          al.category = $cate,\
+          al.image = $image;',
+      {
+        dbid: parseInt(data.id, 10),
+        title: data.title,
+        degree: parseFloat(data.degree),
+        cate: data.category,
+        image: imageUrl,
+      },
+      { database: 'neo4j' }
+    );
+  }
+  res.sendStatus(200);
+  console.warn('Alcohol database update end');
 });
 
 app.post('/_local/add-tag', async (req, res) => {
@@ -210,6 +287,15 @@ app.post('/_local/add-tag', async (req, res) => {
     );
   }
 
+  res.sendStatus(200);
+});
+
+app.get('/_local/test', async (req, res) => {
+  let testSql = 'SELECT * FROM alcohols WHERE id = 329;';
+  mainConn.query(testSql, async (err, rows) => {
+    if (err) throw err;
+    //console.log(rows);
+  });
   res.sendStatus(200);
 });
 
