@@ -39,6 +39,8 @@ tagTitle에 해당하는 태그와 LINKED 관계의 주류를 가져오고,
 
 검색시의 response와 최대한 동일하게 유지하도록 한다. -> 카드에 들어갈 데이터 폼 통일
 
+해당 alcohol node에서 weight가 높은 순서대로 가져온다
+
 pagination 적용되어있음 (default: size = 10, page = 0)
 
 ### query
