@@ -138,6 +138,12 @@ app.get('/tag/byalc/:alcId', async (req, res) => {
 });
 
 app.get('/tag/bytag/:tagTitle', async (req, res) => {
+  const { page = '0', size = '10' } = req.query;
+  let pageNum = parseInt(page.toString(), 10);
+  let sizeNum = parseInt(size.toString(), 10);
+  if (isNaN(pageNum)) pageNum = 0;
+  if (isNaN(sizeNum)) sizeNum = 10;
+
   // node 개수 확인해 없으면 return 404
   const { records: nodeCount } = await tagDriver.executeQuery(
     'MATCH (t:Tag {title: $title}) RETURN count(t) AS count',
@@ -154,13 +160,28 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
     return;
   }
 
+  const { records: alcoholCountRecord } = await tagDriver.executeQuery(
+    'MATCH (t:Tag {title: $title})<-[i:LINKED]-(a:Alcohol)\
+    RETURN count(a) AS count;',
+    {
+      title: req.params.tagTitle,
+    },
+    { database: 'neo4j' }
+  );
+  const count = alcoholCountRecord[0].get('count');
   const { records } = await tagDriver.executeQuery(
     'MATCH (t:Tag {title: $title})<-[i:LINKED]-(a:Alcohol)-[n:LINKED]->(t2:Tag)\
     RETURN i.weight AS weight,\
     a AS alcohol,\
     collect({ title: t2.title, weight: n.weight }) AS otherTags\
-    ORDER BY i.weight DESC;',
-    { title: req.params.tagTitle },
+    ORDER BY i.weight DESC\
+    SKIP $skip\
+    LIMIT $size;',
+    {
+      title: req.params.tagTitle,
+      skip: neo4j.int(pageNum * sizeNum),
+      size: neo4j.int(sizeNum),
+    },
     { database: 'neo4j' }
   );
   const toSend = records.map((e) => {
@@ -181,7 +202,9 @@ app.get('/tag/bytag/:tagTitle', async (req, res) => {
 
   res.status(200).send({
     data: toSend,
-    count: records.length,
+    count: count,
+    page: pageNum,
+    size: sizeNum,
   });
 });
 
@@ -244,7 +267,7 @@ app.post('/_local/alcohol-update', async (req, res) => {
           al.category = $cate,\
           al.image = $image;',
       {
-        dbid: parseInt(data.id, 10),
+        dbid: neo4j.int(parseInt(data.id, 10)),
         title: data.title,
         degree: parseFloat(data.degree),
         cate: data.category,
@@ -290,7 +313,7 @@ app.post('/_local/add-tag', async (req, res) => {
       MERGE (al)-[ln:LINKED]->(tg)\
       ON MATCH SET ln.weight = ln.weight + $weight\
       ON CREATE SET ln.weight = $weight;',
-      { dbid: alcIdNum, title: tag.title, weight: weight },
+      { dbid: neo4j.int(alcIdNum), title: tag.title, weight: weight },
       { database: 'neo4j' }
     );
   }
